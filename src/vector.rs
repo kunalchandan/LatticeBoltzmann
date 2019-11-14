@@ -1,12 +1,11 @@
 use std::ops::*;
 use std::cmp::*;
-use std::fmt::*;
 use std::borrow::Borrow;
 
 
 pub struct Vect2 {
-    pub x: f64,
-    pub y: f64
+    pub x: f32,
+    pub y: f32
 }
 
 
