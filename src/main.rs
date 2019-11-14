@@ -1,10 +1,14 @@
-extern crate piston_window;
 extern crate image as im;
+extern crate nalgebra as na;
+extern crate piston_window;
 
-use piston_window::*;
 use opengl_graphics::GlGraphics;
+use piston_window::*;
+use crate::lattice::{Lattice, build_lattice};
 
-const S: usize = 512;
+mod lattice;
+
+const S: usize = 256;
 
 pub struct App {
     size: u32
@@ -35,6 +39,15 @@ fn get_g_beam(i: u32) -> im::ImageBuffer<im::Rgba<u8>, Vec<u8>>{
 }
 
 fn main() {
+    println!("{}", 5);
+    let mut latt: Lattice = build_lattice();
+    for x in latt.nodes.iter_mut() {
+        for y in x.iter_mut() {
+            y.calc_macro_den();
+            y.calc_macro_vel();
+        }
+    }
+    // println!("{}", vector::Vect2{x: 1.2, y: 3.0} + vector::Vect2{x: 2.0, y: 3.0});
     // Change this to OpenGL::V2_1 if not working.
     let opengl = OpenGL::V3_2;
 
