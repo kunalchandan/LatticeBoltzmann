@@ -1,5 +1,5 @@
 [package]
-name = "LatticeBoltzmann"
+name = "lattice_boltzmann"
 version = "0.1.0"
 authors = ["Kunal Chandan <kunal_chandan@outlook.com>"]
 edition = "2018"

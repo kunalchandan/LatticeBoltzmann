@@ -3,10 +3,10 @@ extern crate rand;
 
 use self::rand::Rng;
 
-const U_X: usize = 64;
-const U_Y: usize = 64;
-const X: u32 = U_X as u32;
-const Y: u32 = U_Y as u32;
+pub const U_X: usize = 32;
+pub const U_Y: usize = 32;
+pub const X: u32 = U_X as u32;
+pub const Y: u32 = U_Y as u32;
 
 // Microscopic velocities
 static E: [[f32; 2]; 9] = [[0.,0.],
@@ -31,8 +31,8 @@ pub struct Node {
     micro_vel: [f32; 9],
     macro_vel: na::Vector2<f32>,
 
-    micro_den: [f32; 9],
-    macro_den: f32,
+    micro_den: [f32; 9], // This is what we see as Fi or F in source [1]
+    pub macro_den: f32,
 
     eq_dist: [f32; 9],
 }
@@ -41,20 +41,20 @@ impl Node {
     pub fn calc_macro_vel(&mut self) {
         // Comes from Equation 4 of source [1] in README.md
         let mut sum = na::Vector2::new(0.,0.);
-        for (i, item) in self.micro_vel.iter().enumerate() {
+        for (i, _item) in self.micro_vel.iter().enumerate() {
             sum += self.micro_vel[i]*na::Vector2::new(E[i][0], E[i][1]);
         }
-        println!("MACRO_VEL::{}", sum);
+//        println!("MACRO_VEL::{}", sum);
         self.macro_vel = (1.0/self.macro_den)*sum;
     }
 
     pub fn calc_macro_den(&mut self) {
         // Comes from Equation 3 of source [1] in README.md
         let mut sum = 0.;
-        for (i, item) in self.micro_den.iter().enumerate() {
+        for (i, _item) in self.micro_den.iter().enumerate() {
             sum += self.micro_den[i];
         }
-        println!("MACRO_DEN::{}", sum);
+//        println!("MACRO_DEN::{}", sum);
         self.macro_den = sum;
     }
 }
@@ -63,6 +63,7 @@ impl Node {
 pub struct Lattice {
     pub nodes: Box<[[Node; U_X]; U_Y]>,
     c: f32, // Lattice Speed = dx/dt
+    tau: f32
 }
 
 pub fn build_lattice() -> Lattice {
@@ -73,13 +74,20 @@ pub fn build_lattice() -> Lattice {
                     micro_vel: [rng.gen(); 9],
                     macro_vel: na::Vector2::new(0.,0.),
                     micro_den: [rng.gen(); 9],
-                    macro_den: na::Vector2::new(0.,0.),
+                    macro_den: 0.,
                     eq_dist: [0.; 9]
         }; U_X]; U_Y].into_boxed_slice().as_mut_ptr() as * mut _)
     };
+    for x in nodes.iter_mut() {
+        for y in x.iter_mut() {
+            y.calc_macro_den();
+            y.calc_macro_vel();
+        }
+    }
     let mut boltz = Lattice {
         nodes,
-        c: 2.0
+        c: 2.0,
+        tau: 1.0
     };
     return boltz;
 }
@@ -117,55 +125,76 @@ impl Lattice {
         // Note:: I think I might've been inspired by source [3], but I didn't read it lol
         // We will solve this inplace.
         // 1st pass swap closest incoming and outgoing micro velocity
-        for (x, _x) in self.nodes.iter_mut().enumerate() {
-            for (y, _y) in _x.iter_mut().enumerate() {
+
+        // Side Note:: Cannot use std::mem::swap because of the borrow checker, and I don't want to
+        // deal with slices and all this other stuff to guarantee safety
+        // while doing unsafe stuff with pointers
+        for x in 0..self.nodes.len() {
+            for y in 0..self.nodes[x].len() {
                 // Swap for each of the 9 directions.
                 if x > 0 {
-                    std::mem::swap(self.nodes[ x ][y].micro_vel[3],
-                                   self.nodes[x-1][y].micro_vel[1]);
+                    let _s_ = self.nodes[ x ][y].micro_vel[3];
+                    self.nodes[ x ][y].micro_vel[3] = self.nodes[x-1][y].micro_vel[1];
+                    self.nodes[x-1][y].micro_vel[1] = _s_;
                     if y > 0 {
-                        std::mem::swap(self.nodes[ x ][y].micro_vel[6],
-                                       self.nodes[x-1][y-1].micro_vel[8]);
+                        let _s_ = self.nodes[ x ][ y ].micro_vel[6];
+                        self.nodes[ x ][ y ].micro_vel[6] = self.nodes[x-1][y-1].micro_vel[8];
+                        self.nodes[x-1][y-1].micro_vel[8] = _s_;
                     }
                     if y < U_Y - 1 {
-                        std::mem::swap(self.nodes[ x ][ y ].micro_vel[7],
-                                       self.nodes[x-1][y+1].micro_vel[5]);
+                        let _s_ = self.nodes[ x ][ y ].micro_vel[7];
+                        self.nodes[ x ][ y ].micro_vel[7] = self.nodes[x-1][y+1].micro_vel[5];
+                        self.nodes[x-1][y+1].micro_vel[5] = _s_;
                     }
                 }
                 if x < U_X - 1 {
-                    std::mem::swap(self.nodes[ x ][y].micro_vel[1],
-                                   self.nodes[x+1][y].micro_vel[3]);
+                    let _s_ = self.nodes[ x ][y].micro_vel[1];
+                    self.nodes[ x ][y].micro_vel[1] = self.nodes[x+1][y].micro_vel[3];
+                    self.nodes[x+1][y].micro_vel[3] = _s_;
                     if y > 0 {
-                        std::mem::swap(self.nodes[ x ][ y ].micro_vel[8],
-                                       self.nodes[x+1][y+1].micro_vel[6]);
+                        let _s_ = self.nodes[ x ][ y ].micro_vel[5];
+                        self.nodes[ x ][ y ].micro_vel[5] = self.nodes[x+1][y-1].micro_vel[7];
+                        self.nodes[x+1][y-1].micro_vel[7] = _s_;
                     }
                     if y < U_Y - 1 {
-                        std::mem::swap(self.nodes[ x ][ y ].micro_vel[5],
-                                       self.nodes[x+1][y-1].micro_vel[7]);
+                        let _s_ = self.nodes[ x ][ y ].micro_vel[8];
+                        self.nodes[ x ][ y ].micro_vel[8] = self.nodes[x+1][y+1].micro_vel[6];
+                        self.nodes[x+1][y+1].micro_vel[6] = _s_;
                     }
                 }
                 if y > 0 {
-                    std::mem::swap(self.nodes[x][ y ].micro_vel[2],
-                                   self.nodes[x][y-1].micro_vel[4]);
+                    let _s_ = self.nodes[x][ y ].micro_vel[2];
+                    self.nodes[x][ y ].micro_vel[2] = self.nodes[x][y-1].micro_vel[4];
+                    self.nodes[x][y-1].micro_vel[4] = _s_;
                 }
                 if y < U_Y - 1 {
-                    std::mem::swap(self.nodes[x][ y ].micro_vel[4],
-                                   self.nodes[x][y+1].micro_vel[2]);
+                    let _s_ = self.nodes[x][ y ].micro_vel[4];
+                    self.nodes[x][ y ].micro_vel[4] = self.nodes[x][y+1].micro_vel[2];
+                    self.nodes[x][y+1].micro_vel[2] = _s_;
                 }
+
+                // TODO:: Resolve Boundary conditions
             }
         }
 
         // 2nd pass swap the now flipped micro velocities in each cell
-        for (x, _x) in self.nodes.iter_mut().enumerate() {
-            for (y, _y) in _x.iter_mut().enumerate() {
-                std::mem::swap(self.nodes[x][y].micro_vel[1],
-                               self.nodes[x][y].micro_vel[3]);
-                std::mem::swap(self.nodes[x][y].micro_vel[2],
-                               self.nodes[x][y].micro_vel[4]);
-                std::mem::swap(self.nodes[x][y].micro_vel[5],
-                               self.nodes[x][y].micro_vel[7]);
-                std::mem::swap(self.nodes[x][y].micro_vel[6],
-                               self.nodes[x][y].micro_vel[8]);
+        for x in 0..self.nodes.len() {
+            for y in 0..self.nodes[x].len() {
+                let _s_ = self.nodes[x][y].micro_vel[1];
+                self.nodes[x][y].micro_vel[1] = self.nodes[x][y].micro_vel[3];
+                self.nodes[x][y].micro_vel[3] = _s_;
+
+                let _s_ = self.nodes[x][y].micro_vel[2];
+                self.nodes[x][y].micro_vel[2] = self.nodes[x][y].micro_vel[4];
+                self.nodes[x][y].micro_vel[4] = _s_;
+
+                let _s_ = self.nodes[x][y].micro_vel[5];
+                self.nodes[x][y].micro_vel[5] = self.nodes[x][y].micro_vel[7];
+                self.nodes[x][y].micro_vel[7] = _s_;
+
+                let _s_ = self.nodes[x][y].micro_vel[6];
+                self.nodes[x][y].micro_vel[6] = self.nodes[x][y].micro_vel[8];
+                self.nodes[x][y].micro_vel[8] = _s_;
             }
         }
     }
@@ -174,15 +203,37 @@ impl Lattice {
         // Calculate the Equilibrium Distribution.
         // Using BKG algorithm/equation from source [1] equation 6
         // Feq[i] = macro_den*(W[i] + S[i](macro_vel)
-        for (x, _x) in self.nodes.iter_mut().enumerate() {
-            for (y, _y) in _x.iter_mut().enumerate() {
-                for (i, _i) in _y.eq_dist.iter_mut().enumerate() {
-                    let rho = self.nodes[x][y].macro_den;
-                    let u = self.nodes[x][y].macro_vel;
-                    let w = W[i];
-                    let ei: na::Vector2<f32> = na::Vector2::new(E[i][0], E[i][1]);
-                    self.nodes[x][y].eq_dist[i] =  rho * w * ( 1 + ((3*ei.dot(u))))
+        let c = self.c;
+        for x in 0..self.nodes.len() {
+            for y in 0..self.nodes[x].len() {
 
+                let rho = self.nodes[x][y].macro_den;
+                let u = self.nodes[x][y].macro_vel;
+
+                for i in 0..self.nodes[x][y].eq_dist.len() {
+                    let wi = W[i];
+                    let ei: na::Vector2<f32> = na::Vector2::new(E[i][0], E[i][1]);
+                    unsafe {
+                        self.nodes[x][y].eq_dist[i] = rho * wi * (1. + (
+                            (3. * ei.dot(&u) / c) +
+                            (9. * ei.dot(&u).powi(2) / (2. * c.powi(2))) -
+                            (3. * u.dot(&u) / (2. * c.powi(2)))));
+                    }
+                }
+            }
+        }
+    }
+
+    fn collision(&mut self) {
+        // Part 2:
+        // Collision ->
+        // Fi = Fi*  - 1/T ( Fi* - Fi eq)
+        for x in 0..self.nodes.len() {
+            for y in 0..self.nodes[x].len() {
+                for i in 0..self.nodes[x][y].micro_den.len() {
+                    let fi = self.nodes[x][y].micro_den[i];
+                    let feq = self.nodes[x][y].eq_dist[i];
+                    self.nodes[x][y].micro_den[i] = fi - ((fi - feq) / self.tau);
                 }
             }
         }
@@ -194,16 +245,5 @@ impl Lattice {
         self.calc_macros();
         self.calc_eq_dist();
         self.collision();
-
-
-        for (x, _x) in self.nodes.iter_mut().enumerate() {
-            for (y, _y) in _x.iter_mut().enumerate() {
-                self.nodes[x][y].calc_macro_den();
-                self.nodes[x][y].calc_macro_vel();
-            }
-        }
-        // Part 2:
-        // Collision ->
-        // Fi = Fi*  - 1/T ( Fi* - Fi eq)
     }
 }
