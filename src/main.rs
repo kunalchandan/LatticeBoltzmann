@@ -14,7 +14,7 @@ pub struct App {
 impl App {
     fn update(&mut self, args: &UpdateArgs) {
         println!("{}", self.step);
-        self.step+=1;
+        self.step += 1;
         self.lattice.update();
     }
 }
@@ -29,8 +29,16 @@ unsafe fn gaussian_beam(x: u32, y: u32, s_: u32) -> u8 {
 }
 
 
+unsafe fn get_gaussian_beam(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
+    println!("GAUSSIAN_BEAM");
+    for (x, y, pixel) in canvas.enumerate_pixels_mut() {
+        *pixel = im::Rgba([gaussian_beam(x, y, lattice::X), 0, 0, 255]);
+    }
+}
+
+
 fn get_density_img(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
-    println!("SLFKJSDLKFJSDF");
+    println!("DENSITY_IMG");
     for (x, y, pixel) in canvas.enumerate_pixels_mut() {
         *pixel = im::Rgba([boltzmann.nodes[x as usize][y as usize].macro_den as u8, 0, 0, 255]);
     }
@@ -65,6 +73,9 @@ fn main() {
             println!("FLAG :: 3.5");
 
             get_density_img(&sim.lattice, &mut canvas);
+            unsafe {
+//                get_gaussian_beam(&sim.lattice, &mut canvas);
+            }
             println!("FLAG :: 4");
 
             let mut texture_context = TextureContext {

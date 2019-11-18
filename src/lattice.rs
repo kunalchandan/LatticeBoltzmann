@@ -51,8 +51,8 @@ impl Node {
     pub fn calc_macro_den(&mut self) {
         // Comes from Equation 3 of source [1] in README.md
         let mut sum = 0.;
-        for (i, _item) in self.micro_den.iter().enumerate() {
-            sum += self.micro_den[i];
+        for i in self.micro_den.iter() {
+            sum += *i;
         }
 //        println!("MACRO_DEN::{}", sum);
         self.macro_den = sum;
@@ -61,23 +61,20 @@ impl Node {
 
 
 pub struct Lattice {
-    pub nodes: Box<[[Node; U_X]; U_Y]>,
+    pub nodes: Vec<Vec<Node>>,
     c: f32, // Lattice Speed = dx/dt
     tau: f32
 }
 
 pub fn build_lattice() -> Lattice {
     let mut rng = rand::thread_rng();
-
-    let mut nodes: Box<[[Node; U_X]; U_Y]> = unsafe { Box::from_raw(
-        vec![[Node{
-                    micro_vel: [rng.gen(); 9],
+    let mut nodes: Vec<Vec<Node>> = vec![vec![Node{
+                    micro_vel: [rng.gen_range(0., 255.); 9],
                     macro_vel: na::Vector2::new(0.,0.),
-                    micro_den: [rng.gen(); 9],
+                    micro_den: [rng.gen_range(0., 255.); 9],
                     macro_den: 0.,
                     eq_dist: [0.; 9]
-        }; U_X]; U_Y].into_boxed_slice().as_mut_ptr() as * mut _)
-    };
+        }; U_X]; U_Y];
     for x in nodes.iter_mut() {
         for y in x.iter_mut() {
             y.calc_macro_den();
@@ -241,8 +238,8 @@ impl Lattice {
 
     pub fn update(&mut self) {
         // TODO:: Do the 2 steps of the method
-        self.streaming();
         self.calc_macros();
+        self.streaming();
         self.calc_eq_dist();
         self.collision();
     }
