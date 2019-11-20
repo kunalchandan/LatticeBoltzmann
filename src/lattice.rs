@@ -1,7 +1,7 @@
 extern crate nalgebra as na;
-extern crate rand;
 
-use self::rand::Rng;
+pub const SCALE_X: u32 = 8;
+pub const SCALE_Y: u32 = 8;
 
 pub const U_X: usize = 32;
 pub const U_Y: usize = 32;
@@ -50,11 +50,13 @@ impl Node {
 
     pub fn calc_macro_den(&mut self) {
         // Comes from Equation 3 of source [1] in README.md
-        let mut sum = 0.;
-        for i in self.micro_den.iter() {
-            sum += *i;
+        let mut sum: f32 = 0.;
+        for i in 0..self.micro_den.len() {
+            sum += self.micro_den[i];
         }
-//        println!("MACRO_DEN::{}", sum);
+        if sum.is_nan() {
+            exit(-23);
+        }
         self.macro_den = sum;
     }
 }
@@ -67,11 +69,10 @@ pub struct Lattice {
 }
 
 pub fn build_lattice() -> Lattice {
-    let mut rng = rand::thread_rng();
     let mut nodes: Vec<Vec<Node>> = vec![vec![Node{
-                    micro_vel: [rng.gen_range(0., 255.); 9],
+                    micro_vel: [0.; 9],
                     macro_vel: na::Vector2::new(0.,0.),
-                    micro_den: [rng.gen_range(0., 255.); 9],
+                    micro_den: [1.; 9],
                     macro_den: 0.,
                     eq_dist: [0.; 9]
         }; U_X]; U_Y];
@@ -90,6 +91,18 @@ pub fn build_lattice() -> Lattice {
 }
 
 impl Lattice {
+
+    fn add_stuff(&mut self, cursor: [f64; 2]) {
+        let c0 = cursor[0] as u32;
+        let c1 = cursor[1] as u32;
+        println!("{}, {}", (c0/SCALE_X) as usize, (c1/SCALE_Y) as usize);
+        for den in 0..self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den.len() {
+            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den[den] += 1.0;
+        }
+        for vel in 0..self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel.len() {
+            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel[vel] += 10. * unsafe { (vel as f32).sin() };
+        }
+    }
 
     fn calc_macros(&mut self) {
         // Part 0:
@@ -210,12 +223,10 @@ impl Lattice {
                 for i in 0..self.nodes[x][y].eq_dist.len() {
                     let wi = W[i];
                     let ei: na::Vector2<f32> = na::Vector2::new(E[i][0], E[i][1]);
-                    unsafe {
-                        self.nodes[x][y].eq_dist[i] = rho * wi * (1. + (
-                            (3. * ei.dot(&u) / c) +
-                            (9. * ei.dot(&u).powi(2) / (2. * c.powi(2))) -
-                            (3. * u.dot(&u) / (2. * c.powi(2)))));
-                    }
+                    self.nodes[x][y].eq_dist[i] = rho * wi * (1. + (
+                        (3. * ei.dot(&u) / c) +
+                        (9. * ei.dot(&u).powi(2) / (2. * c.powi(2))) -
+                        (3. * u.dot(&u) / (2. * c.powi(2)))));
                 }
             }
         }
@@ -236,11 +247,17 @@ impl Lattice {
         }
     }
 
-    pub fn update(&mut self) {
-        // TODO:: Do the 2 steps of the method
+    pub fn update(&mut self, cursor: [f64; 2]) {
+        self.add_stuff(cursor);
         self.calc_macros();
         self.streaming();
         self.calc_eq_dist();
         self.collision();
+//        for x in 0..U_X {
+//            for y in  0..U_Y {
+//                print!("{}, ", self.nodes[x][y].macro_den);
+//            }
+//            println!();
+//        }
     }
 }
