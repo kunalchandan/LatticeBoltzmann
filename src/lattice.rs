@@ -1,5 +1,9 @@
 extern crate nalgebra as na;
 
+use std::process::exit;
+use std::f32::consts::PI;
+
+
 pub const SCALE_X: u32 = 8;
 pub const SCALE_Y: u32 = 8;
 
@@ -29,7 +33,7 @@ static W: [f32; 9] = [4./9.,
 #[derive(Copy, Clone)]
 pub struct Node {
     micro_vel: [f32; 9],
-    macro_vel: na::Vector2<f32>,
+    pub macro_vel: na::Vector2<f32>,
 
     micro_den: [f32; 9], // This is what we see as Fi or F in source [1]
     pub macro_den: f32,
@@ -44,7 +48,6 @@ impl Node {
         for (i, _item) in self.micro_vel.iter().enumerate() {
             sum += self.micro_vel[i]*na::Vector2::new(E[i][0], E[i][1]);
         }
-//        println!("MACRO_VEL::{}", sum);
         self.macro_vel = (1.0/self.macro_den)*sum;
     }
 
@@ -55,6 +58,9 @@ impl Node {
             sum += self.micro_den[i];
         }
         if sum.is_nan() {
+            // TODO:: consider simply clamping it to zero or something like that
+            println!("There was some NaN value at a cell");
+            println!("{}", self.macro_den);
             exit(-23);
         }
         self.macro_den = sum;
@@ -84,7 +90,7 @@ pub fn build_lattice() -> Lattice {
     }
     let mut boltz = Lattice {
         nodes,
-        c: 2.0,
+        c: 0.2,
         tau: 1.0
     };
     return boltz;
@@ -99,9 +105,11 @@ impl Lattice {
         for den in 0..self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den.len() {
             self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den[den] += 1.0;
         }
+        // Some hope to maybe cause forces to move in random-ish directions
         for vel in 0..self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel.len() {
-            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel[vel] += 10. * unsafe { (vel as f32).sin() };
+            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel[vel] = 15. * unsafe { ((vel as f32) * PI/9.0).sin() };
         }
+        println!("{}", self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].macro_vel);
     }
 
     fn calc_macros(&mut self) {
@@ -135,76 +143,51 @@ impl Lattice {
         // Note:: I think I might've been inspired by source [3], but I didn't read it lol
         // We will solve this inplace.
         // 1st pass swap closest incoming and outgoing micro velocity
-
-        // Side Note:: Cannot use std::mem::swap because of the borrow checker, and I don't want to
-        // deal with slices and all this other stuff to guarantee safety
-        // while doing unsafe stuff with pointers
         for x in 0..self.nodes.len() {
             for y in 0..self.nodes[x].len() {
                 // Swap for each of the 9 directions.
                 if x > 0 {
-                    let _s_ = self.nodes[ x ][y].micro_vel[3];
-                    self.nodes[ x ][y].micro_vel[3] = self.nodes[x-1][y].micro_vel[1];
-                    self.nodes[x-1][y].micro_vel[1] = _s_;
+                    let _s_                         = self.nodes[ x ][y].micro_vel[3];
+                    self.nodes[ x ][y].micro_vel[3] = self.nodes[x-1][y].micro_vel[3];
+                    self.nodes[x-1][y].micro_vel[3] = _s_;
                     if y > 0 {
-                        let _s_ = self.nodes[ x ][ y ].micro_vel[6];
-                        self.nodes[ x ][ y ].micro_vel[6] = self.nodes[x-1][y-1].micro_vel[8];
-                        self.nodes[x-1][y-1].micro_vel[8] = _s_;
+                        let _s_                           = self.nodes[ x ][ y ].micro_vel[6];
+                        self.nodes[ x ][ y ].micro_vel[6] = self.nodes[x-1][y-1].micro_vel[6];
+                        self.nodes[x-1][y-1].micro_vel[6] = _s_;
                     }
                     if y < U_Y - 1 {
-                        let _s_ = self.nodes[ x ][ y ].micro_vel[7];
-                        self.nodes[ x ][ y ].micro_vel[7] = self.nodes[x-1][y+1].micro_vel[5];
-                        self.nodes[x-1][y+1].micro_vel[5] = _s_;
+                        let _s_                           = self.nodes[ x ][ y ].micro_vel[7];
+                        self.nodes[ x ][ y ].micro_vel[7] = self.nodes[x-1][y+1].micro_vel[7];
+                        self.nodes[x-1][y+1].micro_vel[7] = _s_;
                     }
                 }
                 if x < U_X - 1 {
-                    let _s_ = self.nodes[ x ][y].micro_vel[1];
-                    self.nodes[ x ][y].micro_vel[1] = self.nodes[x+1][y].micro_vel[3];
-                    self.nodes[x+1][y].micro_vel[3] = _s_;
+                    let _s_                         = self.nodes[ x ][y].micro_vel[1];
+                    self.nodes[ x ][y].micro_vel[1] = self.nodes[x+1][y].micro_vel[1];
+                    self.nodes[x+1][y].micro_vel[1] = _s_;
                     if y > 0 {
-                        let _s_ = self.nodes[ x ][ y ].micro_vel[5];
-                        self.nodes[ x ][ y ].micro_vel[5] = self.nodes[x+1][y-1].micro_vel[7];
-                        self.nodes[x+1][y-1].micro_vel[7] = _s_;
+                        let _s_                           = self.nodes[ x ][ y ].micro_vel[5];
+                        self.nodes[ x ][ y ].micro_vel[5] = self.nodes[x+1][y-1].micro_vel[5];
+                        self.nodes[x+1][y-1].micro_vel[5] = _s_;
                     }
                     if y < U_Y - 1 {
-                        let _s_ = self.nodes[ x ][ y ].micro_vel[8];
-                        self.nodes[ x ][ y ].micro_vel[8] = self.nodes[x+1][y+1].micro_vel[6];
-                        self.nodes[x+1][y+1].micro_vel[6] = _s_;
+                        let _s_                           = self.nodes[ x ][ y ].micro_vel[8];
+                        self.nodes[ x ][ y ].micro_vel[8] = self.nodes[x+1][y+1].micro_vel[8];
+                        self.nodes[x+1][y+1].micro_vel[8] = _s_;
                     }
                 }
                 if y > 0 {
-                    let _s_ = self.nodes[x][ y ].micro_vel[2];
-                    self.nodes[x][ y ].micro_vel[2] = self.nodes[x][y-1].micro_vel[4];
-                    self.nodes[x][y-1].micro_vel[4] = _s_;
+                    let _s_                         = self.nodes[x][ y ].micro_vel[2];
+                    self.nodes[x][ y ].micro_vel[2] = self.nodes[x][y-1].micro_vel[2];
+                    self.nodes[x][y-1].micro_vel[2] = _s_;
                 }
                 if y < U_Y - 1 {
-                    let _s_ = self.nodes[x][ y ].micro_vel[4];
-                    self.nodes[x][ y ].micro_vel[4] = self.nodes[x][y+1].micro_vel[2];
-                    self.nodes[x][y+1].micro_vel[2] = _s_;
+                    let _s_                         = self.nodes[x][ y ].micro_vel[4];
+                    self.nodes[x][ y ].micro_vel[4] = self.nodes[x][y+1].micro_vel[4];
+                    self.nodes[x][y+1].micro_vel[4] = _s_;
                 }
 
                 // TODO:: Resolve Boundary conditions
-            }
-        }
-
-        // 2nd pass swap the now flipped micro velocities in each cell
-        for x in 0..self.nodes.len() {
-            for y in 0..self.nodes[x].len() {
-                let _s_ = self.nodes[x][y].micro_vel[1];
-                self.nodes[x][y].micro_vel[1] = self.nodes[x][y].micro_vel[3];
-                self.nodes[x][y].micro_vel[3] = _s_;
-
-                let _s_ = self.nodes[x][y].micro_vel[2];
-                self.nodes[x][y].micro_vel[2] = self.nodes[x][y].micro_vel[4];
-                self.nodes[x][y].micro_vel[4] = _s_;
-
-                let _s_ = self.nodes[x][y].micro_vel[5];
-                self.nodes[x][y].micro_vel[5] = self.nodes[x][y].micro_vel[7];
-                self.nodes[x][y].micro_vel[7] = _s_;
-
-                let _s_ = self.nodes[x][y].micro_vel[6];
-                self.nodes[x][y].micro_vel[6] = self.nodes[x][y].micro_vel[8];
-                self.nodes[x][y].micro_vel[8] = _s_;
             }
         }
     }
@@ -250,6 +233,9 @@ impl Lattice {
     pub fn update(&mut self, cursor: [f64; 2]) {
         self.add_stuff(cursor);
         self.calc_macros();
+        let c0 = cursor[0] as u32;
+        let c1 = cursor[1] as u32;
+        println!("{}", self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].macro_vel);
         self.streaming();
         self.calc_eq_dist();
         self.collision();
