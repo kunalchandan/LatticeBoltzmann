@@ -1,4 +1,5 @@
 extern crate image as im;
+extern crate imageproc as proc;
 extern crate nalgebra as na;
 extern crate piston_window;
 
@@ -18,7 +19,7 @@ pub struct App {
 
 impl App {
     fn update(&mut self, args: &UpdateArgs) {
-        for i in 0..10 {
+        for i in 0..1 {
             self.step += 1;
             self.lattice.update(self.cursor);
         }
@@ -51,6 +52,22 @@ fn get_density_img(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im
     }
 }
 
+
+fn get_velocity_img(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
+    for x in 0..lattice::X {
+        for y in 0..lattice::Y {
+            let line = boltzmann.nodes[x as usize][y as usize].macro_vel;
+            let mag = line.magnitude() as f32;
+            let x0 = ((x * SCALE_X) as f32) + ((SCALE_X / 2) as f32) + line[0];
+            let y0 = ((y * SCALE_Y) as f32) + ((SCALE_Y / 2) as f32) + line[1];
+            let x1 = ((x * SCALE_X) as f32) + ((SCALE_X / 2) as f32) - line[0];
+            let y1 = ((y * SCALE_Y) as f32) + ((SCALE_Y / 2) as f32) - line[1];
+            proc::drawing::draw_line_segment_mut(canvas, (x0, y0), (x1, y1), im::Rgba([255, 255, 0, 255]));
+        }
+    }
+}
+
+
 fn main() {
     // Change this to OpenGL::V2_1 if not working.
     let opengl = OpenGL::V3_2;
@@ -81,7 +98,7 @@ fn main() {
         if let Some(r) = e.render_args() {
 
             get_density_img(&sim.lattice, &mut canvas);
-
+            get_velocity_img(&sim.lattice, &mut canvas);
             let mut texture_context = TextureContext {
                 factory: window.factory.clone(),
                 encoder: window.factory.create_command_buffer().into()
