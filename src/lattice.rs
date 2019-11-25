@@ -12,6 +12,11 @@ pub const U_Y: usize = 32;
 pub const X: u32 = U_X as u32;
 pub const Y: u32 = U_Y as u32;
 
+pub const MAX_VEL: f32 =  1024.0;
+pub const MIN_VEL: f32 = -1024.0;
+pub const MAX_DEN: f32 = 256.0;
+pub const MIN_DEN: f32 = 0.0;
+
 // Microscopic velocities
 static E: [[f32; 2]; 9] = [[0.,0.],
                            [1.,0.], [ 0.,1.], [-1., 0.], [0.,-1.],
@@ -58,10 +63,12 @@ impl Node {
             sum += self.micro_den[i];
         }
         if sum.is_nan() {
-            // TODO:: consider simply clamping it to zero or something like that
-            println!("There was some NaN value at a cell");
+            println!("There was some NaN value at a cell; Crushing all to zero");
             println!("{}", self.macro_den);
-            exit(-23);
+            for i in 0..self.micro_den.len() {
+                self.micro_den[i] = 0.;
+            }
+            sum = 0.;
         }
         self.macro_den = sum;
     }
@@ -103,13 +110,29 @@ impl Lattice {
         let c1 = cursor[1] as u32;
         println!("{}, {}", (c0/SCALE_X) as usize, (c1/SCALE_Y) as usize);
         for den in 0..self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den.len() {
-            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den[den] += 1.0;
+            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_den[den] += 0.1;
         }
         // Some hope to maybe cause forces to move in random-ish directions
         for vel in 0..self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel.len() {
-            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel[vel] = 15. * unsafe { ((vel as f32) * PI/9.0).sin() };
+            self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].micro_vel[vel] = 100. * unsafe { ((vel as f32) * PI/9.0).cos() };
         }
         println!("{}", self.nodes[(c0/SCALE_X) as usize][(c1/SCALE_Y) as usize].macro_vel);
+    }
+
+    fn clamp_values(&mut self) {
+
+        for x in 0..self.nodes.len() {
+            for y in 0..self.nodes[x].len() {
+                // Clamp Velocities
+                for i in 0..self.nodes[x][y].micro_vel.len() {
+                    self.nodes[x][y].micro_vel[i].clamp(-MAX_VEL, MAX_VEL);
+                }
+                // Clamp Densities
+                for i in 0..self.nodes[x][y].micro_den.len() {
+                    self.nodes[x][y].micro_den[i].clamp(0., MAX_DEN);
+                }
+            }
+        }
     }
 
     fn calc_macros(&mut self) {
@@ -142,52 +165,72 @@ impl Lattice {
         // My streaming Algorithm;
         // Note:: I think I might've been inspired by source [3], but I didn't read it lol
         // We will solve this inplace.
-        // 1st pass swap closest incoming and outgoing micro velocity
+        // First swap adjacent velocities in adjacent nodes
+        // Second swap opposite velocities within a node
         for x in 0..self.nodes.len() {
             for y in 0..self.nodes[x].len() {
                 // Swap for each of the 9 directions.
                 if x > 0 {
                     let _s_                         = self.nodes[ x ][y].micro_vel[3];
-                    self.nodes[ x ][y].micro_vel[3] = self.nodes[x-1][y].micro_vel[3];
-                    self.nodes[x-1][y].micro_vel[3] = _s_;
+                    self.nodes[ x ][y].micro_vel[3] = self.nodes[x-1][y].micro_vel[1];
+                    self.nodes[x-1][y].micro_vel[1] = _s_;
                     if y > 0 {
                         let _s_                           = self.nodes[ x ][ y ].micro_vel[6];
-                        self.nodes[ x ][ y ].micro_vel[6] = self.nodes[x-1][y-1].micro_vel[6];
-                        self.nodes[x-1][y-1].micro_vel[6] = _s_;
+                        self.nodes[ x ][ y ].micro_vel[6] = self.nodes[x-1][y-1].micro_vel[8];
+                        self.nodes[x-1][y-1].micro_vel[8] = _s_;
                     }
                     if y < U_Y - 1 {
                         let _s_                           = self.nodes[ x ][ y ].micro_vel[7];
-                        self.nodes[ x ][ y ].micro_vel[7] = self.nodes[x-1][y+1].micro_vel[7];
-                        self.nodes[x-1][y+1].micro_vel[7] = _s_;
+                        self.nodes[ x ][ y ].micro_vel[7] = self.nodes[x-1][y+1].micro_vel[5];
+                        self.nodes[x-1][y+1].micro_vel[5] = _s_;
                     }
                 }
                 if x < U_X - 1 {
                     let _s_                         = self.nodes[ x ][y].micro_vel[1];
-                    self.nodes[ x ][y].micro_vel[1] = self.nodes[x+1][y].micro_vel[1];
-                    self.nodes[x+1][y].micro_vel[1] = _s_;
+                    self.nodes[ x ][y].micro_vel[1] = self.nodes[x+1][y].micro_vel[3];
+                    self.nodes[x+1][y].micro_vel[3] = _s_;
                     if y > 0 {
                         let _s_                           = self.nodes[ x ][ y ].micro_vel[5];
-                        self.nodes[ x ][ y ].micro_vel[5] = self.nodes[x+1][y-1].micro_vel[5];
-                        self.nodes[x+1][y-1].micro_vel[5] = _s_;
+                        self.nodes[ x ][ y ].micro_vel[5] = self.nodes[x+1][y-1].micro_vel[7];
+                        self.nodes[x+1][y-1].micro_vel[7] = _s_;
                     }
                     if y < U_Y - 1 {
                         let _s_                           = self.nodes[ x ][ y ].micro_vel[8];
-                        self.nodes[ x ][ y ].micro_vel[8] = self.nodes[x+1][y+1].micro_vel[8];
-                        self.nodes[x+1][y+1].micro_vel[8] = _s_;
+                        self.nodes[ x ][ y ].micro_vel[8] = self.nodes[x+1][y+1].micro_vel[6];
+                        self.nodes[x+1][y+1].micro_vel[6] = _s_;
                     }
                 }
                 if y > 0 {
                     let _s_                         = self.nodes[x][ y ].micro_vel[2];
-                    self.nodes[x][ y ].micro_vel[2] = self.nodes[x][y-1].micro_vel[2];
-                    self.nodes[x][y-1].micro_vel[2] = _s_;
+                    self.nodes[x][ y ].micro_vel[2] = self.nodes[x][y-1].micro_vel[4];
+                    self.nodes[x][y-1].micro_vel[4] = _s_;
                 }
                 if y < U_Y - 1 {
                     let _s_                         = self.nodes[x][ y ].micro_vel[4];
-                    self.nodes[x][ y ].micro_vel[4] = self.nodes[x][y+1].micro_vel[4];
-                    self.nodes[x][y+1].micro_vel[4] = _s_;
+                    self.nodes[x][ y ].micro_vel[4] = self.nodes[x][y+1].micro_vel[2];
+                    self.nodes[x][y+1].micro_vel[2] = _s_;
                 }
+            }
+        }
 
-                // TODO:: Resolve Boundary conditions
+        // 2nd pass swap the now flipped micro velocities in each cell
+        for x in 0..self.nodes.len() {
+            for y in 0..self.nodes[x].len() {
+                let _s_ = self.nodes[x][y].micro_vel[1];
+                self.nodes[x][y].micro_vel[1] = self.nodes[x][y].micro_vel[3];
+                self.nodes[x][y].micro_vel[3] = _s_;
+
+                let _s_ = self.nodes[x][y].micro_vel[2];
+                self.nodes[x][y].micro_vel[2] = self.nodes[x][y].micro_vel[4];
+                self.nodes[x][y].micro_vel[4] = _s_;
+
+                let _s_ = self.nodes[x][y].micro_vel[5];
+                self.nodes[x][y].micro_vel[5] = self.nodes[x][y].micro_vel[7];
+                self.nodes[x][y].micro_vel[7] = _s_;
+
+                let _s_ = self.nodes[x][y].micro_vel[6];
+                self.nodes[x][y].micro_vel[6] = self.nodes[x][y].micro_vel[8];
+                self.nodes[x][y].micro_vel[8] = _s_;
             }
         }
     }
@@ -232,6 +275,7 @@ impl Lattice {
 
     pub fn update(&mut self, cursor: [f64; 2]) {
         self.add_stuff(cursor);
+        self.clamp_values();
         self.calc_macros();
         let c0 = cursor[0] as u32;
         let c1 = cursor[1] as u32;

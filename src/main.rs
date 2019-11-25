@@ -47,7 +47,8 @@ unsafe fn get_gaussian_beam(boltzmann: &lattice::Lattice, canvas: &mut im::Image
 fn get_density_img(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
     for x in 0..canvas.dimensions().0 {
         for y in 0..canvas.dimensions().1 {
-            *canvas.get_pixel_mut(x, y) = im::Rgba([boltzmann.nodes[(x/SCALE_X) as usize][(y/SCALE_Y) as usize].macro_den as u8, 0, 0, 255]);
+            let saturation = boltzmann.nodes[(x/SCALE_X) as usize][(y/SCALE_Y) as usize].macro_den as u8;
+            *canvas.get_pixel_mut(x, y) = im::Rgba([saturation * 2, 0, 0, 255]);
         }
     }
 }
