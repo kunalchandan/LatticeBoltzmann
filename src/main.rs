@@ -27,19 +27,25 @@ impl App {
 }
 
 
-unsafe fn gaussian_beam(x: u32, y: u32, s_: u32) -> u8 {
-    let s: f32 = s_ as f32;
-    let x0: f32 = ((x as f32 / s) * 8.0) - 4.0;
-    let y0: f32 = ((y as f32 / s) * 8.0) - 4.0;
-    let a: u8 = (255.0 * (f32::exp(-1.0 * ((f32::powf(x0, 2.0) / 2.0) + (f32::powf(y0, 2.0) / 2.0))) - 0.0)) as u8;
-    return a;
+fn gaussian_beam(x: u32, y: u32, size: u32) -> (f32, f32, f32) {
+    let b: f32 = 0.0;
+    let sx: f32 = 2.0;
+    let sy: f32 = 2.0;
+    let x0: f32 = ((x as f32 / size) * 8.0) - 4.0;
+    let y0: f32 = ((y as f32 / size) * 8.0) - 4.0;
+    let a: f32 = 255.0;
+    let f: f32 = (a * (f32::exp(-1.0 * ((x0.powf(2.0) / (2.0 * sx.powf(2.0))) + (y0.powf(2.0) / (2.0 * sx.powf(2.0))))) - b));
+    let df_dx: f32 = f * (x - x0) / sx.powf(2.0);
+    let df_dy: f32 = f * (y - y0) / sy.powf(2.0);
+
+    return (f, df_dx, df_dy);
 }
 
 
-unsafe fn get_gaussian_beam(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
+unsafe fn get_gaussian_beam_image(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
     println!("GAUSSIAN_BEAM");
     for (x, y, pixel) in canvas.enumerate_pixels_mut() {
-        *pixel = im::Rgba([gaussian_beam(x, y, lattice::X), 0, 0, 255]);
+        *pixel = im::Rgba([gaussian_beam(x, y, lattice::X).0 as u8, 0, 0, 255]);
     }
 }
 
@@ -47,8 +53,8 @@ unsafe fn get_gaussian_beam(boltzmann: &lattice::Lattice, canvas: &mut im::Image
 fn get_density_img(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im::Rgba<u8>, Vec<u8>>) {
     for x in 0..canvas.dimensions().0 {
         for y in 0..canvas.dimensions().1 {
-            let saturation = boltzmann.nodes[(x/SCALE_X) as usize][(y/SCALE_Y) as usize].macro_den as u8;
-            *canvas.get_pixel_mut(x, y) = im::Rgba([saturation * 2, 0, 0, 255]);
+            let saturation: u8 = boltzmann.nodes[(x/SCALE_X) as usize][(y/SCALE_Y) as usize].macro_den as u8;
+            *canvas.get_pixel_mut(x, y) = im::Rgba([saturation.min(255) as u8, 0, 0, 255]);
         }
     }
 }
