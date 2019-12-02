@@ -29,10 +29,12 @@ impl App {
 
 fn gaussian_beam(x: u32, y: u32, size: u32) -> (f32, f32, f32) {
     let b: f32 = 0.0;
+    let x: f32 = x as f32;
+    let y: f32 = y as f32;
     let sx: f32 = 2.0;
     let sy: f32 = 2.0;
-    let x0: f32 = ((x as f32 / size) * 8.0) - 4.0;
-    let y0: f32 = ((y as f32 / size) * 8.0) - 4.0;
+    let x0: f32 = ((x as f32 / size as f32) * 8.0) - 4.0;
+    let y0: f32 = ((y as f32 / size as f32) * 8.0) - 4.0;
     let a: f32 = 255.0;
     let f: f32 = (a * (f32::exp(-1.0 * ((x0.powf(2.0) / (2.0 * sx.powf(2.0))) + (y0.powf(2.0) / (2.0 * sx.powf(2.0))))) - b));
     let df_dx: f32 = f * (x - x0) / sx.powf(2.0);
@@ -54,7 +56,7 @@ fn get_density_img(boltzmann: &lattice::Lattice, canvas: &mut im::ImageBuffer<im
     for x in 0..canvas.dimensions().0 {
         for y in 0..canvas.dimensions().1 {
             let saturation: u8 = boltzmann.nodes[(x/SCALE_X) as usize][(y/SCALE_Y) as usize].macro_den as u8;
-            *canvas.get_pixel_mut(x, y) = im::Rgba([saturation.min(255) as u8, 0, 0, 255]);
+            *canvas.get_pixel_mut(x, y) = im::Rgba([saturation.min(255).max(0) as u8, 0, 0, 255]);
         }
     }
 }
